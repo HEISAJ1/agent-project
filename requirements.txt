@@ -1,0 +1,2 @@
+# Filled in gradually, one library at a time, as we actually use it.
+# Week 1 will add: groq (LLM client), tavily-python (search tool), python-dotenv
