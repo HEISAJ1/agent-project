@@ -37,7 +37,11 @@ def write_summary(original_task: str, research_findings: str) -> str:
                 "You are a clear, concise writer. Given research findings, "
                 "write a well-organized summary suitable for emailing to "
                 "someone. Use plain language, short paragraphs, and no "
-                "mention of 'tools' or the research process itself."
+                "mention of 'tools' or the research process itself. "
+                "Only include facts that are actually present in the "
+                "research findings provided — do not add information, "
+                "even if you believe it to be true, and do not omit any "
+                "of the findings' key points."
             ),
         },
         {
