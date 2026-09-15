@@ -1,19 +1,19 @@
-
 """
-Week 1 core: a hand-rolled agent loop, no framework.
+Week 1 core (now reused as the Researcher agent in week 2): a hand-rolled
+agent loop, no framework.
 
-Design, in plain terms:
-  1. Ask the LLM: does this task need a web search, or can you answer directly?
-  2. If it wants to search: run the search tool for real, get the results.
-  3. Hand those results to the model in a FRESH, clean prompt (not a
-     continuation of the same conversation) and ask for a final answer.
-  4. If it can answer directly with no search: just return that.
+Two functions:
+  - research(task): decides whether a search is needed, runs it if so, and
+    returns the RAW findings (no writing/polishing). This is what the
+    orchestrator's Researcher node calls in week 2.
+  - run_agent(task): calls research(), then also writes a final answer
+    itself. Kept only so this file can still be run standalone/manually
+    tested on its own, the way it was in week 1.
 
-Why a fresh prompt for step 3 instead of continuing the conversation:
-once this model's conversation history contains a tool call/result, it kept
-trying to emit tool-call syntax again even when no tools were offered in
-that request — a real reliability quirk. Starting the final answer as a
-clean, new request sidesteps that entirely instead of fighting it.
+Why a fresh prompt for the final-answer step instead of continuing the
+conversation: once this model's history contains a tool call/result, it
+kept trying to emit tool-call syntax again even when no tools were offered
+in that request — a real reliability quirk. Starting fresh sidesteps it.
 """
 
 import os
@@ -51,8 +51,13 @@ TOOL_SCHEMA = [
 ]
 
 
-def run_agent(user_task: str) -> str:
-    print("\n--- Step 1: deciding whether to search ---")
+def research(user_task: str) -> str | None:
+    """
+    Decides whether the task needs a web search, runs it if so, and returns
+    the raw findings as plain text. Returns None if no search was needed
+    or if every search attempt failed.
+    """
+    print("\n--- Researcher: deciding whether to search ---")
 
     messages = [
         {
@@ -64,8 +69,6 @@ def run_agent(user_task: str) -> str:
         },
         {"role": "user", "content": user_task},
     ]
-
-    search_result = None
 
     for attempt in range(1, MAX_SEARCH_ATTEMPTS + 1):
         try:
@@ -92,19 +95,27 @@ def run_agent(user_task: str) -> str:
                 print(f"Malformed tool call on attempt {attempt}, retrying...")
                 continue
 
-            print(f"Agent is searching for: {args['query']}")
+            print(f"Researcher is searching for: {args['query']}")
             try:
-                search_result = search.run(args)
+                result = search.run(args)
             except Exception as e:
-                search_result = f"Error running search: {e}"
+                result = f"Error running search: {e}"
 
-            print(f"Tool result: {search_result[:200]}...")
-            break
+            print(f"Tool result: {result[:200]}...")
+            return result
         else:
-            print("Agent answered directly, no search needed.")
+            print("Researcher decided no search was needed.")
             return reply.content
 
-    print("\n--- Step 2: writing the final answer ---")
+    print("Researcher could not complete a valid search after retries.")
+    return None
+
+
+def run_agent(user_task: str) -> str:
+    """Standalone use: research + write a final answer in one call."""
+    search_result = research(user_task)
+
+    print("\n--- Writing the final answer ---")
 
     if search_result is None:
         synthesis_messages = [
