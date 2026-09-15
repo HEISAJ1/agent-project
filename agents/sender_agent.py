@@ -6,12 +6,17 @@ here at all — sending an email doesn't need "intelligence," it just needs
 to reliably execute. Keeping this agent dumb-and-simple on purpose is a
 deliberate design choice worth being able to explain: not every step in a
 multi-agent system needs to be an LLM call.
+
+Week 3 addition: wrapped with Langfuse's @observe() (as a plain span, not
+a "generation" — there's no LLM/tokens involved here) so it still shows up
+in the trace tree, just without cost data attached.
 """
 
 import os
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from dotenv import load_dotenv
+from langfuse import observe
 
 load_dotenv()
 
@@ -23,6 +28,7 @@ api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
 )
 
 
+@observe(name="sender")
 def send_email(to_email: str, subject: str, body: str) -> str:
     """
     Sends a plain-text email via Brevo.
@@ -44,6 +50,9 @@ def send_email(to_email: str, subject: str, body: str) -> str:
 
 
 if __name__ == "__main__":
+    from langfuse import get_client
+    langfuse = get_client()
+
     test_to = input("Enter your email to send a test to: ")
     result = send_email(
         to_email=test_to,
@@ -51,3 +60,4 @@ if __name__ == "__main__":
         body="If you're reading this, the Sender agent works.",
     )
     print(result)
+    langfuse.flush()

@@ -10,12 +10,20 @@ Writer's output to the Sender, the orchestrator checks it against a simple
 rubric first. If it fails, the graph loops back to the Writer WITH the
 feedback, instead of shipping something bad. This loop-back is capped at a
 few attempts so a stuck review can't loop forever.
+
+Week 3 addition: the whole pipeline runs inside one Langfuse trace
+(run_pipeline is the root @observe()). Because research() and
+write_summary() are also individually @observe()-decorated, and review is
+its own generation here, the result is one trace tree per run showing
+every agent's call, in order, with cost attached — instead of four
+disconnected log lines.
 """
 
 import os
 from typing import TypedDict, Optional
 from groq import Groq
 from dotenv import load_dotenv
+from langfuse import observe, get_client
 from langgraph.graph import StateGraph, END
 
 from agents import react_agent, writer_agent, sender_agent
@@ -23,6 +31,7 @@ from agents import react_agent, writer_agent, sender_agent
 load_dotenv()
 
 client = Groq(api_key=os.environ["GROQ_API_KEY"])
+langfuse = get_client()
 MODEL = "openai/gpt-oss-120b"
 MAX_WRITE_ATTEMPTS = 3
 
@@ -38,12 +47,14 @@ class AgentState(TypedDict):
     final_status: Optional[str]
 
 
+@observe(name="research_node")
 def research_node(state: AgentState) -> AgentState:
     findings = react_agent.research(state["task"])
     state["research_findings"] = findings or "No search results were found."
     return state
 
 
+@observe(name="write_node")
 def write_node(state: AgentState) -> AgentState:
     state["write_attempts"] += 1
 
@@ -60,6 +71,7 @@ def write_node(state: AgentState) -> AgentState:
     return state
 
 
+@observe(as_type="generation", name="review_node")
 def review_node(state: AgentState) -> AgentState:
     print("\n--- Reviewing the summary before sending ---")
 
@@ -87,6 +99,16 @@ def review_node(state: AgentState) -> AgentState:
     verdict = response.choices[0].message.content.strip()
     print(f"Review verdict: {verdict}")
 
+    langfuse.update_current_generation(
+        model=MODEL,
+        input=state["summary"],
+        output=verdict,
+        usage_details={
+            "input": response.usage.prompt_tokens,
+            "output": response.usage.completion_tokens,
+        },
+    )
+
     if verdict.upper().startswith("PASS"):
         state["review_passed"] = True
         state["review_feedback"] = None
@@ -97,6 +119,7 @@ def review_node(state: AgentState) -> AgentState:
     return state
 
 
+@observe(name="send_node")
 def send_node(state: AgentState) -> AgentState:
     result = sender_agent.send_email(
         to_email=state["to_email"],
@@ -135,6 +158,7 @@ graph.add_edge("send", END)
 app = graph.compile()
 
 
+@observe(name="agent_pipeline")
 def run_pipeline(task: str, to_email: str) -> AgentState:
     initial_state: AgentState = {
         "task": task,
@@ -146,7 +170,9 @@ def run_pipeline(task: str, to_email: str) -> AgentState:
         "write_attempts": 0,
         "final_status": None,
     }
-    return app.invoke(initial_state)
+    result = app.invoke(initial_state)
+    langfuse.flush()
+    return result
 
 
 if __name__ == "__main__":

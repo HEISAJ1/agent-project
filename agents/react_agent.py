@@ -14,18 +14,24 @@ Why a fresh prompt for the final-answer step instead of continuing the
 conversation: once this model's history contains a tool call/result, it
 kept trying to emit tool-call syntax again even when no tools were offered
 in that request — a real reliability quirk. Starting fresh sidesteps it.
+
+Week 3 addition: every LLM call here is wrapped with Langfuse's @observe()
+decorator so it shows up as a trace, and we manually attach token usage so
+cost per run is visible too.
 """
 
 import os
 import json
 from groq import Groq
 from dotenv import load_dotenv
+from langfuse import observe, get_client
 
 from tools import search
 
 load_dotenv()
 
 client = Groq(api_key=os.environ["GROQ_API_KEY"])
+langfuse = get_client()
 
 MODEL = "openai/gpt-oss-120b"
 MAX_SEARCH_ATTEMPTS = 3
@@ -51,6 +57,7 @@ TOOL_SCHEMA = [
 ]
 
 
+@observe(as_type="generation", name="researcher")
 def research(user_task: str) -> str | None:
     """
     Decides whether the task needs a web search, runs it if so, and returns
@@ -102,15 +109,37 @@ def research(user_task: str) -> str | None:
                 result = f"Error running search: {e}"
 
             print(f"Tool result: {result[:200]}...")
+
+            langfuse.update_current_generation(
+                model=MODEL,
+                input=user_task,
+                output=result,
+                usage_details={
+                    "input": response.usage.prompt_tokens,
+                    "output": response.usage.completion_tokens,
+                },
+                metadata={"searched_for": args["query"]},
+            )
             return result
         else:
             print("Researcher decided no search was needed.")
+            langfuse.update_current_generation(
+                model=MODEL,
+                input=user_task,
+                output=reply.content,
+                usage_details={
+                    "input": response.usage.prompt_tokens,
+                    "output": response.usage.completion_tokens,
+                },
+                metadata={"searched": False},
+            )
             return reply.content
 
     print("Researcher could not complete a valid search after retries.")
     return None
 
 
+@observe()
 def run_agent(user_task: str) -> str:
     """Standalone use: research + write a final answer in one call."""
     search_result = research(user_task)
@@ -148,3 +177,4 @@ if __name__ == "__main__":
     answer = run_agent(task)
     print("\n=== FINAL ANSWER ===")
     print(answer)
+    langfuse.flush()

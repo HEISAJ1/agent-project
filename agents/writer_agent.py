@@ -6,19 +6,25 @@ written summary. It has no tools and does no searching — pure synthesis.
 Keeping it single-purpose (instead of one agent that both researches AND
 writes) is the actual point of "multi-agent": each agent stays simple and
 good at one thing, instead of one prompt trying to juggle everything.
+
+Week 3 addition: wrapped with Langfuse's @observe() so this call shows up
+in traces, with token usage attached for cost tracking.
 """
 
 import os
 from groq import Groq
 from dotenv import load_dotenv
+from langfuse import observe, get_client
 
 load_dotenv()
 
 client = Groq(api_key=os.environ["GROQ_API_KEY"])
+langfuse = get_client()
 
 MODEL = "openai/gpt-oss-120b"
 
 
+@observe(as_type="generation", name="writer")
 def write_summary(original_task: str, research_findings: str) -> str:
     """
     Takes the original task and the Researcher agent's findings, and returns
@@ -45,11 +51,21 @@ def write_summary(original_task: str, research_findings: str) -> str:
     ]
 
     response = client.chat.completions.create(model=MODEL, messages=messages)
-    return response.choices[0].message.content
+    output = response.choices[0].message.content
+
+    langfuse.update_current_generation(
+        model=MODEL,
+        input=original_task,
+        output=output,
+        usage_details={
+            "input": response.usage.prompt_tokens,
+            "output": response.usage.completion_tokens,
+        },
+    )
+
+    return output
 
 
-# Manual test — run this file directly to try the Writer on its own,
-# without needing the Researcher or the full pipeline.
 if __name__ == "__main__":
     fake_research = (
         "Groq's free tier: no credit card required, ~30 requests/min, "
@@ -59,3 +75,4 @@ if __name__ == "__main__":
     )
     summary = write_summary("Summarize Groq's free tier limits", fake_research)
     print(summary)
+    langfuse.flush()
