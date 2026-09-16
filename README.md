@@ -30,4 +30,10 @@ week 4.
     Fixed: tightened the Writer's system prompt to explicitly
   forbid adding information not present in the findings and to preserve
   all key points. Confirmed fixed — re-running the full eval suite after
-  this change brought the pass rate from 83% to 100% (12/12).
+  this change brought the pass rate from 83% to 100% (12/12).Status: Complete. Weeks 1-4 done — agent, multi-agent orchestration,
+evals + observability, deployment + CI all working.
+
+**Live**: https://agent-project-izh1.onrender.com
+(free tier — cold starts after ~15 min idle can take 30-50s on first request)
+
+**Repo**: https://github.com/HEISAJ1/agent-project
