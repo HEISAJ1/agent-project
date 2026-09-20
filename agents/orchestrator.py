@@ -1,4 +1,4 @@
-"""
+﻿"""
 Week 2: the orchestrator — wires Researcher, Writer, and Sender into one
 actual multi-agent system using LangGraph.
 
@@ -94,8 +94,7 @@ def review_node(state: AgentState) -> AgentState:
         },
     ]
 
-    response = client.chat.completions.create(
-        model=MODEL, messages=review_prompt)
+    response = client.chat.completions.create(model=MODEL, messages=review_prompt)
     verdict = response.choices[0].message.content.strip()
     print(f"Review verdict: {verdict}")
 
@@ -173,6 +172,30 @@ def run_pipeline(task: str, to_email: str) -> AgentState:
     result = app.invoke(initial_state)
     langfuse.flush()
     return result
+
+
+def stream_pipeline(task: str, to_email: str):
+    """
+    Same pipeline as run_pipeline, but yields a progress update after each
+    node finishes instead of only returning the final result. This is what
+    lets the frontend show live "Researching... Writing... Reviewing...
+    Sending..." status instead of a blank loading spinner for the whole
+    30-60 seconds the pipeline takes to run.
+    """
+    initial_state: AgentState = {
+        "task": task,
+        "to_email": to_email,
+        "research_findings": None,
+        "summary": None,
+        "review_passed": False,
+        "review_feedback": None,
+        "write_attempts": 0,
+        "final_status": None,
+    }
+    for chunk in app.stream(initial_state, stream_mode="updates"):
+        for node_name, node_state in chunk.items():
+            yield node_name, node_state
+    langfuse.flush()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Week 1 core (now reused as the Researcher agent in week 2): a hand-rolled
 agent loop, no framework.
 
@@ -13,15 +13,23 @@ Two functions:
 Why a fresh prompt for the final-answer step instead of continuing the
 conversation: once this model's history contains a tool call/result, it
 kept trying to emit tool-call syntax again even when no tools were offered
-in that request — a real reliability quirk. Starting fresh sidesteps it.
+in that request - a real reliability quirk. Starting fresh sidesteps it.
 
 Week 3 addition: every LLM call here is wrapped with Langfuse's @observe()
 decorator so it shows up as a trace, and we manually attach token usage so
 cost per run is visible too.
+
+Freshness addition: the model has no reliable sense of "today" on its own
+(its training data has a cutoff, and it can't tell how long ago that was
+relative to now). The system prompt tells it the real current date
+explicitly, and nudges it to actually search rather than answer from
+memory whenever a question could plausibly have changed since training -
+"current," "latest," people/roles/prices/versions, etc.
 """
 
 import os
 import json
+from datetime import date
 from groq import Groq
 from dotenv import load_dotenv
 from langfuse import observe, get_client
@@ -57,6 +65,19 @@ TOOL_SCHEMA = [
 ]
 
 
+def _system_prompt() -> str:
+    today = date.today().strftime("%B %d, %Y")
+    return (
+        f"You are a helpful research agent. Today's date is {today}. "
+        "Your own knowledge may be outdated, so use the web_search tool "
+        "whenever a question could plausibly have changed since you were "
+        "trained - current events, prices, versions, people in a role, "
+        "or anything described as 'current' or 'latest.' When search "
+        "results include a published date, note it and prefer the most "
+        "recent sources if results disagree."
+    )
+
+
 @observe(as_type="generation", name="researcher")
 def research(user_task: str) -> str | None:
     """
@@ -67,13 +88,7 @@ def research(user_task: str) -> str | None:
     print("\n--- Researcher: deciding whether to search ---")
 
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a helpful research agent. Use the web_search tool "
-                "if you need current information you don't already know."
-            ),
-        },
+        {"role": "system", "content": _system_prompt()},
         {"role": "user", "content": user_task},
     ]
 
@@ -148,7 +163,7 @@ def run_agent(user_task: str) -> str:
 
     if search_result is None:
         synthesis_messages = [
-            {"role": "system", "content": "Answer the user's question as best you can."},
+            {"role": "system", "content": _system_prompt()},
             {"role": "user", "content": user_task},
         ]
     else:
@@ -156,9 +171,9 @@ def run_agent(user_task: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "Answer the user's question directly and concisely, "
-                    "using the search results provided. Do not mention tools "
-                    "or the search process — just answer the question."
+                    _system_prompt() + " Answer directly and concisely, "
+                    "using the search results provided. Do not mention "
+                    "tools or the search process - just answer the question."
                 ),
             },
             {
@@ -167,8 +182,7 @@ def run_agent(user_task: str) -> str:
             },
         ]
 
-    response = client.chat.completions.create(
-        model=MODEL, messages=synthesis_messages)
+    response = client.chat.completions.create(model=MODEL, messages=synthesis_messages)
     return response.choices[0].message.content
 
 

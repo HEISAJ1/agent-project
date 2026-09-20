@@ -1,17 +1,22 @@
-"""
+﻿"""
 Week 2: the Writer agent.
 
 Its only job: take raw research findings and turn them into a clean, well-
-written summary. It has no tools and does no searching — pure synthesis.
+written summary. It has no tools and does no searching - pure synthesis.
 Keeping it single-purpose (instead of one agent that both researches AND
 writes) is the actual point of "multi-agent": each agent stays simple and
 good at one thing, instead of one prompt trying to juggle everything.
 
 Week 3 addition: wrapped with Langfuse's @observe() so this call shows up
 in traces, with token usage attached for cost tracking.
+
+Freshness addition: told the real current date and instructed to carry
+over any dates present in the research findings (e.g. "as of March 2026")
+rather than presenting search results as timeless facts.
 """
 
 import os
+from datetime import date
 from groq import Groq
 from dotenv import load_dotenv
 from langfuse import observe, get_client
@@ -30,18 +35,23 @@ def write_summary(original_task: str, research_findings: str) -> str:
     Takes the original task and the Researcher agent's findings, and returns
     a clean, well-written summary suitable for sending to someone.
     """
+    today = date.today().strftime("%B %d, %Y")
+
     messages = [
         {
             "role": "system",
             "content": (
-                "You are a clear, concise writer. Given research findings, "
-                "write a well-organized summary suitable for emailing to "
-                "someone. Use plain language, short paragraphs, and no "
-                "mention of 'tools' or the research process itself. "
-                "Only include facts that are actually present in the "
-                "research findings provided — do not add information, "
-                "even if you believe it to be true, and do not omit any "
-                "of the findings' key points."
+                f"You are a clear, concise writer. Today's date is {today}. "
+                "Given research findings, write a well-organized summary "
+                "suitable for emailing to someone. Use plain language, "
+                "short paragraphs, and no mention of 'tools' or the "
+                "research process itself. Only include facts that are "
+                "actually present in the research findings provided - do "
+                "not add information, even if you believe it to be true, "
+                "and do not omit any of the findings' key points. If the "
+                "findings include a publication date, reflect that "
+                "recency (e.g. 'as of <date>') instead of stating things "
+                "as permanent, unchanging facts."
             ),
         },
         {

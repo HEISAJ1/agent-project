@@ -1,0 +1,323 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatch - Give it a task. Get a dispatch.</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%97%9E%EF%B8%8F</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDEAE1;
+    --paper-raised: #F5F3EC;
+    --ink: #1C1B19;
+    --ink-muted: #6B665C;
+    --rule: #C7C0B2;
+    --stamp: #B23A2E;
+    --wire-green: #2F5D3A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #17181A;
+      --paper-raised: #1E1F21;
+      --ink: #EDEAE1;
+      --ink-muted: #9C978A;
+      --rule: #3A3936;
+      --stamp: #E06A57;
+      --wire-green: #5CA36B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #17181A;
+    --paper-raised: #1E1F21;
+    --ink: #EDEAE1;
+    --ink-muted: #9C978A;
+    --rule: #3A3936;
+    --stamp: #E06A57;
+    --wire-green: #5CA36B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 4.5rem 1.5rem 6rem;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 5vw, 2.75rem);
+    font-weight: 600;
+    line-height: 1.15;
+    margin: 0 0 0.9rem;
+    letter-spacing: -0.01em;
+  }
+
+  .sub {
+    color: var(--ink-muted);
+    font-size: 1.08rem;
+    max-width: 46ch;
+    margin: 0 0 2.75rem;
+  }
+
+  .rule {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 0;
+  }
+
+  form { padding: 2.25rem 0; }
+
+  .field { margin-bottom: 1.5rem; }
+
+  label {
+    display: block;
+    font-size: 0.92rem;
+    color: var(--ink-muted);
+    margin-bottom: 0.4rem;
+  }
+
+  textarea, input {
+    width: 100%;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.7rem 0.8rem;
+    font-family: inherit;
+    font-size: 1rem;
+    color: var(--ink);
+  }
+
+  textarea { min-height: 4.5rem; resize: vertical; }
+
+  textarea:focus, input:focus {
+    outline: 2px solid var(--stamp);
+    outline-offset: 1px;
+  }
+
+  .hint {
+    font-size: 0.82rem;
+    color: var(--ink-muted);
+    margin-top: 0.35rem;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 1.02rem;
+    font-weight: 600;
+    background: var(--stamp);
+    color: #FBF8F2;
+    border: none;
+    border-radius: 3px;
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+  }
+
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  button:not(:disabled):hover { filter: brightness(1.08); }
+
+  .status-line {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1.5rem;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+  }
+
+  .status-line.active { display: flex; }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--rule);
+    border-top-color: var(--stamp);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .dispatch {
+    margin-top: 2.5rem;
+    padding-top: 2.25rem;
+    border-top: 1px solid var(--rule);
+    opacity: 0;
+    transform: translateY(6px);
+    animation: reveal 0.5s ease forwards;
+  }
+
+  .dispatch.hidden { display: none; }
+
+  @keyframes reveal {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .stamp-line {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: var(--wire-green);
+    margin-bottom: 0.9rem;
+  }
+
+  .stamp-line.error { color: var(--stamp); }
+
+  .dispatch h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    line-height: 1.25;
+  }
+
+  .dispatch .body {
+    white-space: pre-wrap;
+    font-size: 1.02rem;
+  }
+
+  .dispatch .body p { margin: 0 0 1em; }
+
+  footer {
+    margin-top: 4rem;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+  }
+
+  footer a { color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Give it a task. Get a dispatch.</h1>
+  <p class="sub">
+    Dispatch is a small research agent. Give it a task and an inbox - it
+    researches the topic, drafts a summary, checks its own work, and
+    files the finished result to your inbox.
+  </p>
+
+  <hr class="rule">
+
+  <form id="runForm">
+    <div class="field">
+      <label for="task">Task</label>
+      <textarea id="task" placeholder="e.g. Summarize the latest LangGraph release" required></textarea>
+    </div>
+
+    <div class="field">
+      <label for="email">Send results to</label>
+      <input id="email" type="email" placeholder="you@example.com" required>
+    </div>
+
+    <div class="field">
+      <label for="apiKey">API key</label>
+      <input id="apiKey" type="password" placeholder="Paste your key" required>
+      <div class="hint">Not sure what this is? Ask whoever shared this page with you.</div>
+    </div>
+
+    <button type="submit" id="submitBtn">Run the assignment</button>
+
+    <div class="status-line" id="statusLine">
+      <span class="spinner"></span>
+      <span>Researching, drafting, and checking the work - this can take up to a minute.</span>
+    </div>
+  </form>
+
+  <div class="dispatch hidden" id="dispatch"></div>
+
+  <footer>
+    Built by AJ -
+    <a href="https://github.com/HEISAJ1/agent-project" target="_blank">source on GitHub</a>.
+  </footer>
+</div>
+
+<script>
+  const form = document.getElementById('runForm');
+  const statusLine = document.getElementById('statusLine');
+  const submitBtn = document.getElementById('submitBtn');
+  const dispatch = document.getElementById('dispatch');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const task = document.getElementById('task').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
+
+    if (!task || !email || !apiKey) return;
+
+    submitBtn.disabled = true;
+    statusLine.classList.add('active');
+    dispatch.classList.add('hidden');
+    dispatch.innerHTML = '';
+
+    try {
+      const res = await fetch('/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        },
+        body: JSON.stringify({ task, to_email: email })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const message = data.detail || 'Could not file this. Try again in a moment.';
+        showError(message);
+        return;
+      }
+
+      showDispatch(task, data.summary || 'No summary was returned.');
+    } catch (err) {
+      showError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      submitBtn.disabled = false;
+      statusLine.classList.remove('active');
+    }
+  });
+
+  function showDispatch(task, summary) {
+    const now = new Date().toLocaleString(undefined, {
+      dateStyle: 'medium', timeStyle: 'short'
+    });
+    dispatch.classList.remove('hidden');
+    dispatch.style.animation = 'none';
+    dispatch.offsetHeight;
+    dispatch.style.animation = null;
+    dispatch.innerHTML = `
+      <div class="stamp-line">DISPATCHED &middot; ${now}</div>
+      <h2>${escapeHtml(task)}</h2>
+      <div class="body">${escapeHtml(summary)}</div>
+    `;
+  }
+
+  function showError(message) {
+    dispatch.classList.remove('hidden');
+    dispatch.innerHTML = `
+      <div class="stamp-line error">NOT FILED</div>
+      <div class="body">${escapeHtml(message)}</div>
+    `;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>

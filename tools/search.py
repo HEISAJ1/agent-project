@@ -1,6 +1,20 @@
-from dotenv import load_dotenv
+﻿"""
+The agent's first tool: web search, via Tavily.
+
+Every tool in this project follows the same shape: takes a dict of arguments,
+returns a plain string the LLM can read. That consistency is what lets the
+agent loop call any tool the same way, without special-casing each one.
+
+Freshness note: Tavily includes a "published_date" on results when the
+source page provides one - not every page does, so it's included only
+when present rather than guessed. Surfacing it is what lets the agent (and
+the final summary) ground claims to a real date instead of presenting
+search results as timeless facts.
+"""
+
 import os
 from tavily import TavilyClient
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -10,7 +24,8 @@ client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
 def run(args: dict) -> str:
     """
     args expected shape: {"query": "some search text"}
-    Returns a plain-text summary of the top search results.
+    Returns a plain-text summary of the top search results, including each
+    result's published date where Tavily provides one.
     """
     query = args.get("query", "")
     if not query:
@@ -30,13 +45,13 @@ def run(args: dict) -> str:
         title = entry.get("title", "Untitled")
         url = entry.get("url", "")
         snippet = entry.get("content", "")[:300]
-        formatted.append(f"{i}. {title}\n   {url}\n   {snippet}")
+        published = entry.get("published_date")
+        date_line = f"   Published: {published}\n" if published else ""
+        formatted.append(f"{i}. {title}\n{date_line}   {url}\n   {snippet}")
 
     return "\n\n".join(formatted)
 
 
-# Quick manual test — run this file directly to check the tool works on its own,
-# before the agent loop ever touches it.
 if __name__ == "__main__":
     test_result = run({"query": "current Groq API rate limits free tier"})
     print(test_result)
