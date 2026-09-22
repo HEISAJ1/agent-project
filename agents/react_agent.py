@@ -13,7 +13,7 @@ Two functions:
 Why a fresh prompt for the final-answer step instead of continuing the
 conversation: once this model's history contains a tool call/result, it
 kept trying to emit tool-call syntax again even when no tools were offered
-in that request - a real reliability quirk. Starting fresh sidesteps it.
+in that request — a real reliability quirk. Starting fresh sidesteps it.
 
 Week 3 addition: every LLM call here is wrapped with Langfuse's @observe()
 decorator so it shows up as a trace, and we manually attach token usage so
@@ -23,8 +23,15 @@ Freshness addition: the model has no reliable sense of "today" on its own
 (its training data has a cutoff, and it can't tell how long ago that was
 relative to now). The system prompt tells it the real current date
 explicitly, and nudges it to actually search rather than answer from
-memory whenever a question could plausibly have changed since training -
+memory whenever a question could plausibly have changed since training —
 "current," "latest," people/roles/prices/versions, etc.
+
+Disambiguation addition: after live testing showed vague queries (e.g.
+"Chelsea summary") pulling back a mix of unrelated results — men's vs
+women's team, different competitions, different seasons — the prompt now
+tells the Researcher to make its search query specific enough to scope
+out that ambiguity up front, instead of leaving disambiguation entirely
+to the Writer downstream.
 """
 
 import os
@@ -42,7 +49,7 @@ client = Groq(api_key=os.environ["GROQ_API_KEY"])
 langfuse = get_client()
 
 MODEL = "openai/gpt-oss-120b"
-MAX_SEARCH_ATTEMPTS = 3
+MAX_SEARCH_ATTEMPTS = 3  # retries if the model sends a malformed tool call
 
 TOOL_SCHEMA = [
     {
@@ -71,10 +78,26 @@ def _system_prompt() -> str:
         f"You are a helpful research agent. Today's date is {today}. "
         "Your own knowledge may be outdated, so use the web_search tool "
         "whenever a question could plausibly have changed since you were "
-        "trained - current events, prices, versions, people in a role, "
+        "trained — current events, prices, versions, people in a role, "
         "or anything described as 'current' or 'latest.' When search "
         "results include a published date, note it and prefer the most "
-        "recent sources if results disagree."
+        "recent sources if results disagree. Only state a specific fact "
+        "(a score, a standing, a status like 'relegated' or 'in first "
+        "place') if it is explicitly and clearly stated in the search "
+        "results — never infer or guess a specific fact from partial, "
+        "ambiguous, or unrelated context. If the results don't clearly "
+        "confirm a specific detail, say so explicitly rather than "
+        "presenting a guess as a fact. When forming your search query, "
+        "make it as specific as the task allows rather than using a bare "
+        "name — many real-world names refer to more than one thing (a "
+        "men's team vs a women's team, a club vs a national team, two "
+        "people who share a name, a franchise vs a specific product "
+        "version). If the task doesn't specify which one is meant, "
+        "default to the most common/primary meaning and include a "
+        "disambiguating term in your query (e.g. 'Chelsea men's first "
+        "team Premier League result' rather than just 'Chelsea "
+        "summary'), so the results you get back are already scoped to "
+        "the right entity instead of a mix of unrelated ones."
     )
 
 
@@ -173,7 +196,7 @@ def run_agent(user_task: str) -> str:
                 "content": (
                     _system_prompt() + " Answer directly and concisely, "
                     "using the search results provided. Do not mention "
-                    "tools or the search process - just answer the question."
+                    "tools or the search process — just answer the question."
                 ),
             },
             {

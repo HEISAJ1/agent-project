@@ -17,6 +17,17 @@ write_summary() are also individually @observe()-decorated, and review is
 its own generation here, the result is one trace tree per run showing
 every agent's call, in order, with cost attached — instead of four
 disconnected log lines.
+
+Attribution addition: after live testing found the Writer could present a
+real fact from noisy multi-source research attached to the wrong
+team/entity (e.g. crediting a men's-team summary with a result that
+actually belonged to the women's team, based on an unfamiliar manager's
+name in the source), the review step's rubric now explicitly checks fact
+attribution, not just general accuracy/clarity. This is the general fix,
+not a one-off patch: review is a fresh, independent pass that can catch
+misattribution for ANY entity, not just ones we've seen fail before —
+whereas trying to teach the Writer every possible ambiguous case up front
+doesn't generalize.
 """
 
 import os
@@ -81,8 +92,24 @@ def review_node(state: AgentState) -> AgentState:
             "content": (
                 "You are a strict editor. Judge whether the SUMMARY "
                 "accurately reflects the RESEARCH and is clearly written. "
-                "Respond with exactly one line: either 'PASS' or "
-                "'FAIL: <short reason>'."
+                "In addition to general accuracy and clarity, specifically "
+                "check attribution: for every specific fact in the SUMMARY "
+                "(a score, a result, a signing, a quote, a statistic), "
+                "verify it is clearly tied in the RESEARCH to the same "
+                "entity, team, or competition as the rest of the summary "
+                "is about — not just a plausible-sounding fact that "
+                "happens to share a name. Pay close attention to any "
+                "person's name (a manager, coach, official, or other "
+                "individual) attached to a fact in the RESEARCH — if that "
+                "person isn't clearly the same organization/team as the "
+                "summary's main subject, and the SUMMARY presents the "
+                "fact as if it were a confirmed, on-topic fact anyway, "
+                "that is a FAIL. Also FAIL if the SUMMARY states a "
+                "specific detail as certain when the RESEARCH only "
+                "supports it ambiguously or partially. Respond with "
+                "exactly one line: either 'PASS' or 'FAIL: <short "
+                "reason, specifically naming which fact is misattributed "
+                "or unsupported if applicable>'."
             ),
         },
         {
@@ -94,7 +121,8 @@ def review_node(state: AgentState) -> AgentState:
         },
     ]
 
-    response = client.chat.completions.create(model=MODEL, messages=review_prompt)
+    response = client.chat.completions.create(
+        model=MODEL, messages=review_prompt)
     verdict = response.choices[0].message.content.strip()
     print(f"Review verdict: {verdict}")
 
