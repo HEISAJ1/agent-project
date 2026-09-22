@@ -1,8 +1,5 @@
 name: Run agent evals
 
-# Runs the DeepEval suite automatically on every push and every pull
-# request, so a regression in agent behavior gets caught before it ships
-# instead of being discovered by a user (or a recruiter).
 on:
   push:
     branches: [main]
@@ -26,7 +23,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run the eval suite
-                env:
+        env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
@@ -34,4 +31,3 @@ jobs:
           LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
         run: deepeval test run evals/test_cases.py
-        
